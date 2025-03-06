@@ -1,0 +1,19 @@
+[package]
+name = "search_engine"
+version = "0.1.0"
+edition = "2021"
+default-run = "search_engine"
+
+[dependencies]
+actix-cors = "0.7.0"
+actix-web = "4.9.0"
+porter-stemmer = "0.1.2"
+regex = "1.11.1"
+scraper = "0.22.0"
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.139"
+url-parse = "1.0.10"
+
+[[bin]]
+name = "page_rank"
+path = "src/enable_page_rank.rs"
