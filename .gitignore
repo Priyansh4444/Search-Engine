@@ -15,6 +15,7 @@
 *.swo
 
 inverted_index/
+developer/
 
 # Debug files
 **/*.pdb
