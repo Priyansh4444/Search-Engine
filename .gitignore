@@ -29,4 +29,5 @@ Thumbs.db
 
 # Generated documentation
 doc/
-
+# remove all pdf files might it be papers I linked or the assignments & textbooks [remind me to add it to readme as links]
+*.pdf

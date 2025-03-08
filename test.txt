@@ -1,0 +1,24 @@
+Hello there,
+
+I was reading a paper recently for simhash since I am a part of the course CS121, what was cool is that this algorithm was made for simhashing, I am confident this is a misunderstanding on my end but I am confused as to the algorithm 
+for the current algorithm:
+in the proposed architecture, the algorithm proposes the current:
+Make N tables with the full 64 bit fingerprints, but permuted by blocks, the advantage gained here is the fact that if there are no errors in the probed bits,
+they are candidates for computing if they are supposed to be near duplicates (we do a jaccard similiarity check or xor the bits to see how many of them are different bits)
+
+My confusion lies in the implementation of the permutation, because as they mentioned the table holds two permuted quantities, and these can run in parallel w.r.t to the tables if I have understood correctly
+This causes a lot of duplication of data considering and also I think a lot of work in the sense that we have to permute our given query before sending it off to these tables
+
+Rather than holding the the query in each table as 64 bits, we just use the blocks themselves? that way you can see how many of the blocks are simliar and you get the docIDs which are potential candidates for near duplicates
+This way you see how m any blocks are similiar, once you figure out that lets say out of the 4 blocks, we find that 3 or more blocks are the same, we can do the jaccard similarity, (this is the same as checking 31~33 bit are the same)
+the only problem I swee with this apporach is that rather than duplicating data for more tables which will be held in memory,
+we are holding more Possibilities and removing them by score if that makes sense, 
+On average if we have 2^34 Documents:
+1 block: 2 ^ (34 - 10) = 2^25 = 16 milliion documents to compare
+ => and with documents as candidates we are filtering each document with 16 millino more candidates with a scoring alogrithm, we should endup with only the near duplicates
+ at most 3 blocks which are different which should also be 8 documents.
+This is less expensive in holding every permutation in memory while gaining the benefit of filtering to documents to probe and compare with using the jaccard smiilarity 
+of the same amount of documents.
+I do see the problems that this can be memory inexpensive but I think its a bit better than having 
+8B * 64 = 64 GB of memory for each table loaded into main memory, since its more lazy and better for lower ended systems, since you are only holding candidate MORE docids as a memory overhead rather than every single permutation of fingerprint
+

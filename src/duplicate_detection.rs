@@ -112,3 +112,10 @@ struct SimHashes {
 // * 8billion that would average 4 tables × billions of entries
 // sorting would slow down search here, but sorting can fix this with interpolation search with a candidate based apporach reducing candidates to check
 
+// * my understanding on this in unclear to say the least, but I think the idea, is you have 64GB of data holding 8 Billion 64-bit fingerprints
+// * You divide them up into 20 tables: each table holding 11 ~ 10 bits for these finger prints, the total number of data in the table is still 8 billion, there is no duplication necessarily
+// * but you are storing the same data ACROSS 20 Tables, so you can probe and see what permutations align up, then from these 20 tables at least 3 permutations must align up to be a candidate (31 ~ 33 bits) query key
+// * you get those docids, go back to your data and recalculate the simhash and then check if it is a near duplicate or not
+// ! this is a very high level understanding of the paper, and I am not sure if this is correct, but this is what I have understood from the paper
+
+// ? The table is stored in a sorted order i.e. the permuted bits are sorted (how are the docIDs stored, are those the things that are duplicated?)
