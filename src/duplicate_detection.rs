@@ -1,5 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 use std::hash::{Hash, Hasher};
 use std::ops::BitAnd;
 
@@ -24,36 +24,23 @@ pub fn crc32checksum(data: &[u8]) -> u64 {
 }
 
 // https://wwwconference.org/wp-content/uploads/2025/01/paper215.pdf
-// section three mentions how you should sort these and store these instead of
-// checking all of the hashes that exist since thats time expensive and rather storing every single hash in the table since that would be memory expensive
 
-// since we only want to see a difference of three we store them in a sorted order and compare
-// we can quickly search only the nodes we need to check that could be different, like is there a number in which this bit is different or these two bits are different or these three bits are different
-// this would not scale with a threshold of 4 or 5 since the number of comparisons would be too high, but we are taking advantage of the fact that hashing is compressing the data into a smaller vector making it easier to compare hashes so it might be viable
-// Only check the remaining (less significant) bits of the fingerprints that matched in the first step.
-// To make sure you catch every possible match, you might need to create a few extra copies of your sorted list, each sorted slightly differently. This helps you cover all the possible locations of the bit differences.
-
-// * Thought, what if we used a binary tree and as soon as we break three steps, its a different hash,
-// * but how do i store a binary tree in disk since we are going to have a lot of hashes
-
-// for k = 3 bits, we have to search for 2^(d-p(i))
-
-// * this paper mentions interpolation search which is not a search im used to but seems to be log(log(n)) which is MUCH faster than binary search
-
-// since we would want to parallelize checking if simhashes were similar what they do is dividde u64 into 4 parts and check if each part is similar with the 4 parts having their own tables
-// each division of 4 is 16 bits each, and they each have  a table with 2^16 entries since there are those many permutations of 16 bits, this uniformity is also what gives it its speed with interpolation search
-// the more the number of tables we see that the less amount of queries we have to make, since the permutations becomes significantly less!!!
-// making it super fast with 6 tables but that would take ALOT more space!, with map reduce also this could be parallelized which is a huge advantage with map reduce!
-
-// since I dont have mapreduce capabilities. currently I will be doing it the brute force way, and hopefully down the line I can implement the interpolation search with at least two tables
-// each table just proposes candidates to check, and then we do a hamming distance check to see if they are similar or not
-// if any of the candidates differ by more than 3 bits during choosing the candidates, then we can safely say that they are not similar
+// ? Divide the fingerprint into blocks, from these blocks permute them and make a combination of tables :=> these combinations are used to look up the possible actual candidates to probe and chekc with respect to the query finger prints
+// ? whats beautiful is checking multiple permutations of the same fingerprint to check for the near duplicates is since you are checking multiple permutations of the same table together, you dont have to recheck the permutaitons of these blocks since you are already doing every possible combination together
+// ? (I still have an idea, why make permutations and join that feels memory inefficient, is there a way to simulate it without making the actual permutations while checking this saves memory but increases time both each signifcantly)
+// ? Lets test that algorithm here and see if it is possible
 pub fn simhash(data: &String) -> u64 {
     let input_str = data.to_lowercase();
     // create features (shingles) - using 3-character shingles
-    let features = make_features(&input_str);
-    // initialize the bit counts for 64 bits - i8 is sufficient for counting
-    let mut bit_counts = [0u8; 64];
+    let features = input_str
+        .chars()
+        .collect::<Vec<char>>()
+        .windows(3)
+        .map(|w| w.iter().collect::<String>())
+        .collect::<Vec<String>>();
+    // initialize the bit counts for 64 bits
+    // max you can add is 64 times, aka i8 = 64
+    let mut bit_counts = [0i8; 64];
     // hash each feature and update bit counts
     for feature in features {
         let hash = calculate_hash(&feature);
@@ -66,32 +53,15 @@ pub fn simhash(data: &String) -> u64 {
             }
         }
     }
-
     // generate the final hash from bit counts
     let mut result: u64 = 0;
     for i in 0..64 {
+        // if its a positive number, set the bit to 1
         if bit_counts[i] > 0 {
             result |= 1 << i;
         }
     }
-
     result
-}
-
-fn make_features(input_str: &str) -> Vec<String> {
-    // K = 3 as mentioned is a good length from the paper
-    let length = 3;
-    let cleaned: String = input_str.chars().filter(|c| c.is_alphanumeric()).collect();
-    // If string is too short, return the whole string
-    if cleaned.len() <= length {
-        return vec![cleaned];
-    }
-    // create shingles
-    let mut features = Vec::new();
-    for i in 0..=(cleaned.len() - length) {
-        features.push(cleaned[i..(i + length)].to_string());
-    }
-    features
 }
 
 fn calculate_hash(feature: &str) -> u64 {
@@ -100,22 +70,83 @@ fn calculate_hash(feature: &str) -> u64 {
     hasher.finish()
 }
 
-// * first u16 point to the bits which are the most significant, and the Vec<u16> are the doc_ids that would be candidates if they were to be matched
-struct SimHashes {
-    first_16: HashMap<u16, Vec<u16>>,
-    second_16: HashMap<u16, Vec<u16>>,
-    third_16: HashMap<u16, Vec<u16>>,
-    fourth_16: HashMap<u16, Vec<u16>>,
+struct SimHashTabler {
+    blocks: Vec<SimHashPermTable>,
 }
-// * things to do and optimize this further would be to sort and store the keys I think since there would be a lot of keys in the hashmap which are supposed to be offloaded to disk
-// * the biggest problem is that 16 bits can hold 65,536 values each, and we are effectively storing a lot of docIds (each 16 bytes) as well, which is not feasible in memory especially as a vec, at the scale of 
-// * 8billion that would average 4 tables × billions of entries
-// sorting would slow down search here, but sorting can fix this with interpolation search with a candidate based apporach reducing candidates to check
 
-// * my understanding on this in unclear to say the least, but I think the idea, is you have 64GB of data holding 8 Billion 64-bit fingerprints
-// * You divide them up into 20 tables: each table holding 11 ~ 10 bits for these finger prints, the total number of data in the table is still 8 billion, there is no duplication necessarily
-// * but you are storing the same data ACROSS 20 Tables, so you can probe and see what permutations align up, then from these 20 tables at least 3 permutations must align up to be a candidate (31 ~ 33 bits) query key
-// * you get those docids, go back to your data and recalculate the simhash and then check if it is a near duplicate or not
-// ! this is a very high level understanding of the paper, and I am not sure if this is correct, but this is what I have understood from the paper
+struct SimHashPermTable {
+    table: HashMap<u16, BinaryHeap<u16>>,
+}
 
-// ? The table is stored in a sorted order i.e. the permuted bits are sorted (how are the docIDs stored, are those the things that are duplicated?)
+impl SimHashTabler {
+    pub fn new() -> SimHashTabler {
+        SimHashTabler {
+            // For now divide the 64 bit fingerprint into 6 blocks
+            blocks: Vec::with_capacity(6),
+        }
+    }
+
+    pub fn add_permutation(&mut self, fingerprint: u64) {
+        // Divide the fingerprint into 6 blocks
+        let blocks = fingerprint_to_blocks(&fingerprint);
+        // Add the blocks to the table
+        for i in 0..6 {
+            self.blocks[i]
+                .table
+                .entry(blocks[i])
+                .or_insert(BinaryHeap::new());
+            self.blocks[i]
+                .table
+                .get_mut(&blocks[i])
+                .unwrap()
+                .push(blocks[i]);
+        }
+    }
+
+    fn get_candidates(&self, fingerprint: u64) -> Vec<u16> {
+        let mut candidates = Vec::new();
+        // Divide the fingerprint into 6 blocks
+        let blocks = fingerprint_to_blocks(&fingerprint);
+        // Get the candidates from the tables
+        for i in 0..6 {
+            if let Some(table) = self.blocks[i].table.get(&blocks[i]) {
+                for candidate in table.iter() {
+                    candidates.push(*candidate);
+                }
+            }
+        }
+
+        candidates
+    }
+
+    fn is_duplicate(&self, fingerprint: u64) -> bool {
+        let mut candidates = self.get_candidates(fingerprint);
+        filter_candidates(&mut candidates);
+        for candidate in candidates.iter() {
+            if hamming_distance(fingerprint, *candidate as u64) < 3 {
+                return true;
+            }
+        }
+        false
+    }
+}
+fn hamming_distance(fingerprint1: u64, fingerprint2: u64) -> u8 {
+    let xor_result = fingerprint1 ^ fingerprint2;
+    xor_result.count_ones() as u8
+}
+fn fingerprint_to_blocks(fingerprint: &u64) -> Vec<u16> {
+    let mut blocks = Vec::with_capacity(6);
+    for i in 0..6 {
+        blocks.push((fingerprint >> (i * 10)) as u16);
+    }
+    blocks
+}
+
+fn filter_candidates(candidates: &mut Vec<u16>) {
+    // if the candidate exists more than 3 times, then keep it
+    let mut counts = HashMap::new();
+    for &candidate in candidates.iter() {
+        *counts.entry(candidate).or_insert(0) += 1;
+    }
+    candidates.retain(|&candidate| counts.get(&candidate).map_or(false, |&count| count > 3));
+}
