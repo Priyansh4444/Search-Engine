@@ -9,6 +9,7 @@ use crate::postings::Postings;
 pub const MERGED_INDEX_DIR: &str = "inverted_index/merged";
 const PARTITION: u16 = 100;
 
+#[derive(Debug, Clone)]
 pub struct FileSkip {
     character: char,
     word: String,

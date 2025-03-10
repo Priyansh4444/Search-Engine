@@ -7,11 +7,17 @@ pub struct IDBookElement {
     pub id: u16,
     pub url: String,
     pub path: PathBuf,
+    pub token_count: u32,
 }
 
 impl IDBookElement {
-    pub fn new(id: u16, url: String, path: PathBuf) -> Self {
-        Self { id, url, path }
+    pub fn new(id: u16, url: String, path: PathBuf, token_count: u32) -> Self {
+        Self {
+            id,
+            url,
+            path,
+            token_count,
+        }
     }
 
     pub fn get_domain(&self) -> String {
@@ -24,10 +30,11 @@ impl IDBookElement {
     }
 
     pub fn idbook_element_from_string(id: u16, line: &str) -> Self {
-        let mut parts = line.splitn(2, '|');
+        let mut parts = line.splitn(3, '|');
         let url = parts.next().unwrap().trim().to_string();
         let path = PathBuf::from(parts.next().unwrap().trim().to_string());
-        Self::new(id, url, path)
+        let token_count = parts.next().unwrap().trim().parse::<u32>().unwrap();
+        Self::new(id, url, path, token_count)
     }
 
     pub fn get_doc_from_id(id: u16) -> Self {

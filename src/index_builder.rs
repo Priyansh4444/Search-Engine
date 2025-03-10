@@ -1,4 +1,5 @@
 use crate::inverted_index;
+use crate::tokenizer::Tokenizer;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -15,9 +16,9 @@ pub const IDBOOK_PATH: &str = "inverted_index/id_book.txt";
 pub const BATCH_SIZE: u16 = 5000; // Define the batch size
 #[derive(Debug, Deserialize)]
 
-struct Document {
+pub struct Document {
     url: String,
-    content: String,
+    pub content: String,
     encoding: String,
 }
 
@@ -36,13 +37,38 @@ fn get_only_text_from_html(content: &str, encoding: String) -> String {
 
     let selector = scraper::Selector::parse("body")
         .unwrap_or_else(|_| scraper::Selector::parse("html").unwrap());
+    // Define selectors with their priority weights
+    let priority_selectors = [
+        ("title", 10),
+        ("h1", 8),
+        ("h2", 6),
+        ("h3", 5),
+        ("h4", 4),
+        ("h5", 3),
+        ("h6", 2),
+        ("strong", 2),
+        ("b", 1),
+    ];
 
+    let mut combined_text = String::new();
+
+    // the body text first
     if let Some(body) = document.select(&selector).next() {
-        body.text()
-            .collect::<String>()
-            .chars()
-            .filter(|c| c.is_ascii())
-            .collect()
+        combined_text.push_str(&body.text().collect::<String>());
+
+        // priority-based repetition for important elements
+        for (tag, weight) in priority_selectors {
+            if let Ok(sel) = scraper::Selector::parse(tag) {
+                for element in document.select(&sel) {
+                    let text = element.text().collect::<String>();
+                    for _ in 0..weight * 5 {
+                        combined_text.push_str(&text);
+                    }
+                }
+            }
+        }
+
+        combined_text
     } else {
         String::new()
     }
@@ -72,7 +98,6 @@ fn process_file(
     }
     // ! do some logic if there is a query as well perhaps since it could be bad for us
     let text: String = get_only_text_from_html(&doc.content, doc.encoding);
-    // * 
     // Send the processed document data to the main thread
     let mut doc_id = doc_id.lock().unwrap();
     *doc_id += 1;
@@ -177,7 +202,12 @@ pub fn main() -> u16 {
     match fs::File::create(IDBOOK_PATH) {
         Ok(mut file) => {
             for (id, (url, filepath)) in sorted_entries {
-                let mut line = format!("{} | {}", url, filepath);
+                let document: Document =
+                    serde_json::from_str(&fs::read_to_string(filepath).unwrap())
+                        .expect("Error deserializing document");
+                let all_tokens = get_only_text_from_html(&document.content, "utf-8".to_string());
+                let tokens_length = Tokenizer::new().tokenize(&all_tokens).len();
+                let mut line = format!("{} | {} | {}", url, filepath, tokens_length);
                 if line.len() >= 399 {
                     line.truncate(399);
                 } else {

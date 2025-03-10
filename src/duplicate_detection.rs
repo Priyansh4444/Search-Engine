@@ -106,7 +106,7 @@ impl SimHashTabler {
     fn get_candidates(&self, fingerprint: u64) -> Vec<u16> {
         let mut candidates = Vec::new();
         // Divide the fingerprint into 6 blocks
-        let blocks = fingerprint_to_blocks(&fingerprint);
+        let blocks: Vec<u16> = fingerprint_to_blocks(&fingerprint);
         // Get the candidates from the tables
         for i in 0..6 {
             if let Some(table) = self.blocks[i].table.get(&blocks[i]) {
