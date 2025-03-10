@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
 use url_parse::core::Parser;
-const PATH: &str = "../developer/DEV/";
+const PATH: &str = "developer/DEV/";
 pub const IDBOOK_PATH: &str = "inverted_index/id_book.txt";
 pub const BATCH_SIZE: u16 = 5000; // Define the batch size
 #[derive(Debug, Deserialize)]
